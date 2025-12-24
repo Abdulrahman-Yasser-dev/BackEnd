@@ -31,6 +31,7 @@ Route::post('/profile/upload-avatar/{id}', [ProfileController::class, 'uploadAva
 
 Route::get('/portfolio/{userId}', [PortfolioController::class, 'index']);
 Route::post('/portfolio', [PortfolioController::class, 'store']);
+Route::post('/portfolio/upload-files', [PortfolioController::class, 'uploadFiles']);
 Route::post('/profile/upsert', [ProfileController::class, 'upsert'])->middleware('auth:sanctum');
 Route::delete('/portfolio/{userId}/{itemId}', [PortfolioController::class, 'destroy']);
 

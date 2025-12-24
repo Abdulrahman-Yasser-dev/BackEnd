@@ -43,6 +43,24 @@ class PortfolioController extends Controller
         return response()->json(['message' => 'Portfolio item added', 'portfolio' => $portfolio]);
     }
 
+    public function uploadFiles(Request $request)
+    {
+        $request->validate([
+            'files' => 'required|array',
+            'files.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+
+        $urls = [];
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $file) {
+                $path = $file->store('portfolio', 'public');
+                $urls[] = asset('storage/' . $path);
+            }
+        }
+
+        return response()->json(['message' => 'Files uploaded', 'urls' => $urls]);
+    }
+
     public function destroy(Request $request, $userId, $itemId)
     {
         $user = User::find($userId);

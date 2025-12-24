@@ -8,7 +8,6 @@ use App\Models\User;
 
 class ProfileController extends Controller
 {
-    // Get profile by user ID
     public function show($id)
     {
         $user = User::find($id);
@@ -21,7 +20,6 @@ class ProfileController extends Controller
         ]);
     }
 
-    // Update profile data
     public function update(Request $request, $id)
     {
         $user = User::find($id);
@@ -29,7 +27,6 @@ class ProfileController extends Controller
             return response()->json(['message' => 'Profile not found'], 404);
         }
 
-        // Only update allowed fields
         $allowedFields = ['full_name', 'bio', 'title', 'city', 'category', 'user_role', 'provider_type'];
         $user->update($request->only($allowedFields));
 
@@ -39,7 +36,6 @@ class ProfileController extends Controller
         ]);
     }
 
-    // Switch role (provider/client)
     public function switchRole(Request $request, $id)
     {
         $user = User::find($id);
@@ -73,9 +69,10 @@ class ProfileController extends Controller
             'avatar' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        $path = $file->store('avatars', 'public'); // storage/app/public/avatars
+        $path = $file->store('avatars', 'public'); 
 
-        $user->avatar_url = '/storage/' . $path;
+        // $user->avatar_url = '/storage/' . $path;
+        $user->avatar_url = asset('storage/' . $path);
         $user->save();
 
         return response()->json([
