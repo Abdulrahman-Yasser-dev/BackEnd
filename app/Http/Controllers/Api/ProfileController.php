@@ -10,7 +10,7 @@ class ProfileController extends Controller
 {
     public function show($id)
     {
-        $user = User::find($id);
+        $user = User::with(['categories', 'skills'])->find($id);
         if (!$user) {
             return response()->json(['message' => 'Profile not found'], 404);
         }
@@ -29,6 +29,16 @@ class ProfileController extends Controller
 
         $allowedFields = ['full_name', 'bio', 'title', 'city', 'category', 'user_role', 'provider_type'];
         $user->update($request->only($allowedFields));
+
+        if ($request->has('category_ids')) {
+            $user->categories()->sync($request->category_ids);
+        }
+
+        if ($request->has('skill_ids')) {
+            $user->skills()->sync($request->skill_ids);
+        }
+
+        $user->load(['categories', 'skills']);
 
         return response()->json([
             'message' => 'Profile updated',
@@ -69,7 +79,7 @@ class ProfileController extends Controller
             'avatar' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        $path = $file->store('avatars', 'public'); 
+        $path = $file->store('avatars', 'public');
 
         // $user->avatar_url = '/storage/' . $path;
         $user->avatar_url = asset('storage/' . $path);
@@ -88,6 +98,8 @@ class ProfileController extends Controller
             'full_name' => 'required|string|max:255',
             'user_role' => 'required|string|in:client,provider',
             'provider_type' => 'nullable|string|in:freelance,local',
+            'category_ids' => 'nullable|array',
+            'skill_ids' => 'nullable|array',
         ]);
 
         $user = User::find($request->id);
@@ -101,6 +113,14 @@ class ProfileController extends Controller
         $user->provider_type = $request->user_role === 'provider' ? $request->provider_type : null;
         $user->updated_at = now();
         $user->save();
+
+        if ($request->has('category_ids')) {
+            $user->categories()->sync($request->category_ids);
+        }
+
+        if ($request->has('skill_ids')) {
+            $user->skills()->sync($request->skill_ids);
+        }
 
         return response()->json([
             'message' => 'Profile upserted successfully',

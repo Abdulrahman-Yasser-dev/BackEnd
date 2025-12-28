@@ -7,6 +7,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class AuthController extends Controller
 {
@@ -26,10 +28,13 @@ class AuthController extends Controller
             'password'  => $request->password,
         ]);
 
+
+        $user->sendEmailVerificationNotification();
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'message' => 'User registered successfully',
+            'message' => 'User registered successfully. Please verify your email.',
             'token'   => $token,
             'user'    => $user,
         ], 201);
@@ -50,6 +55,10 @@ class AuthController extends Controller
             ]);
         }
 
+        if (!$user->hasVerifiedEmail()) {
+            return response()->json(['message' => 'Email not verified. Please check your inbox.'], 403);
+        }
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -67,7 +76,7 @@ class AuthController extends Controller
 
     public function currentUser(Request $request)
     {
-        $user = $request->user(); 
+        $user = $request->user();
         if (!$user) {
             return response()->json(['message' => 'No authenticated user'], 401);
         }
@@ -87,22 +96,23 @@ class AuthController extends Controller
             return response()->json(['message' => 'User not found'], 404);
         }
 
-        $token = \Illuminate\Support\Str::random(60);
+        $token = Str::random(60);
 
-        \Illuminate\Support\Facades\DB::table('password_reset_tokens')->updateOrInsert(
+        DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $request->email],
             [
-                'email' => $request->email,
-                'token' => $token, // Ideally hash this token
+                'token' => Hash::make($token),
                 'created_at' => now()
             ]
         );
 
-        // In a real app, send email here. 
-        // For development, return token in response.
+        \Illuminate\Support\Facades\Mail::send('emails.password_reset', ['token' => $token, 'email' => $request->email], function ($message) use ($user) {
+            $message->to($user->email);
+            $message->subject('Reset Your Password');
+        });
+
         return response()->json([
-            'message' => 'Reset link sent', 
-            'token' => $token // DEV ONLY
+            'message' => 'Reset link sent to your email.',
         ]);
     }
 
@@ -114,29 +124,52 @@ class AuthController extends Controller
             'password' => 'required|min:8',
         ]);
 
-        $record = \Illuminate\Support\Facades\DB::table('password_reset_tokens')
-                    ->where('email', $request->email)
-                    ->where('token', $request->token)
-                    ->first();
+        $record = DB::table('password_reset_tokens')
+            ->where('email', $request->email)
+            ->first();
 
-        if (!$record) {
-            return response()->json(['message' => 'Invalid token or email'], 400);
+        if (!$record || !Hash::check($request->token, $record->token)) {
+            return response()->json(['message' => 'Invalid token'], 400);
         }
 
-        // Check if token is expired (e.g. 1 hour)
-        // For simplicity we skip time check or assume valid if exists
-        
+        if (now()->diffInMinutes($record->created_at) > 60) {
+            return response()->json(['message' => 'Token expired'], 400);
+        }
+
+
         $user = User::where('email', $request->email)->first();
         if (!$user) {
-             return response()->json(['message' => 'User not found'], 404);
+            return response()->json(['message' => 'User not found'], 404);
         }
 
         $user->password = Hash::make($request->password);
         $user->save();
 
-        \Illuminate\Support\Facades\DB::table('password_reset_tokens')->where(['email'=> $request->email])->delete();
+        DB::table('password_reset_tokens')->where(['email' => $request->email])->delete();
 
         return response()->json(['message' => 'Password reset successfully']);
+    }
+
+    public function validateResetToken(Request $request)
+    {
+        $request->validate([
+            'token' => 'required',
+            'email' => 'required|email',
+        ]);
+
+        $record = DB::table('password_reset_tokens')
+            ->where('email', $request->email)
+            ->first();
+
+        if (!$record || !Hash::check($request->token, $record->token)) {
+            return response()->json(['message' => 'Invalid token'], 400);
+        }
+
+        if (now()->diffInMinutes($record->created_at) > 60) {
+            return response()->json(['message' => 'Token expired'], 400);
+        }
+
+        return response()->json(['message' => 'Token is valid']);
     }
 
     public function updatePassword(Request $request, $id)
@@ -157,5 +190,24 @@ class AuthController extends Controller
         $user->save();
 
         return response()->json(['message' => 'Password updated successfully']);
+    }
+
+
+    public function resendVerification(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        if ($user->hasVerifiedEmail()) {
+            return response()->json(['message' => 'Email already verified.']);
+        }
+
+        $user->sendEmailVerificationNotification();
+
+        return response()->json(['message' => 'Verification link sent.']);
     }
 }
