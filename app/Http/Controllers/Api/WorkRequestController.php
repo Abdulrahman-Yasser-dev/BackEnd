@@ -137,7 +137,6 @@ class WorkRequestController extends Controller
                 ]);
             }
 
-            // Mark any pending_status notifications for THIS user and THIS work request as read
             Notification::where('user_id', $userId)
                 ->where('type', 'status_pending')
                 ->whereJsonContains('data->work_request_id', (int)$id)
@@ -149,7 +148,6 @@ class WorkRequestController extends Controller
             ]);
         }
 
-        // Check if we are rejecting a pending change
         if ($request->input('reject') && $workRequest->pending_status) {
             if ($workRequest->pending_status_changed_by === $userId) {
                 return response()->json(['message' => 'You cannot reject your own change request'], 400);
@@ -160,7 +158,6 @@ class WorkRequestController extends Controller
             $workRequest->pending_status_changed_by = null;
             $workRequest->save();
 
-            // Create log entry for rejection
             $workRequest->logs()->create([
                 'old_status' => $workRequest->status,
                 'new_status' => $workRequest->status, // No change

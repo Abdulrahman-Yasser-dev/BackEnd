@@ -83,7 +83,7 @@ Route::delete('/portfolio/{userId}/{itemId}', [PortfolioController::class, 'dest
 
 
 Route::get('/work-requests', [WorkRequestController::class, 'index']);
-Route::post('/work-request', [WorkRequestController::class, 'store']);
+Route::post('/work-request', [WorkRequestController::class, 'store'])->middleware('auth:sanctum');
 Route::put('/work-request/{id}/status', [WorkRequestController::class, 'updateStatus'])->middleware('auth:sanctum');
 Route::put('/work-request/{id}/assign-provider', [WorkRequestController::class, 'assignProvider'])->middleware('auth:sanctum');
 
@@ -104,3 +104,4 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 Route::get('/reviews/user/{userId}', [\App\Http\Controllers\Api\ReviewController::class, 'getReviewsForUser']);
+Route::post('/contact', [\App\Http\Controllers\Api\ContactController::class, 'send']);
