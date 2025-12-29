@@ -25,7 +25,7 @@ class WorkRequestController extends Controller
         // Count existing projects
         $projectCount = WorkRequest::where('user_id', $request->user()->id)->count();
         if ($projectCount >= 4) {
-            return response()->json(['message' => 'Limit reached. You can only create up to 4 projects.'], 400);
+            return response()->json(['message' => __('Limit reached. You can only create up to 4 projects.')], 400);
         }
 
         $validated = $request->validate([
@@ -91,18 +91,28 @@ class WorkRequestController extends Controller
 
             if (!$canConfirm) {
                 if (!$workRequest->provider_id || $workRequest->provider_id !== $userId) {
-                    return response()->json(['message' => 'Unauthorized. Only the assigned provider can update status.'], 403);
+                    return response()->json(['message' => __('Unauthorized. Only the assigned provider can update status.')], 403);
                 }
             } else {
                 if (!$isProvider && (!$workRequest->provider_id || $workRequest->provider_id !== $userId)) {
-                    return response()->json(['message' => 'Unauthorized. You must have at least messaged the client to confirm status.'], 403);
+                    return response()->json(['message' => __('Unauthorized. You must have at least messaged the client to confirm status.')], 403);
                 }
+            }
+        } elseif ($isOwner) {
+            // OWNER RESTRICTION: Cannot change status if no provider assigned (unless it's cancelling/rejecting which is handled elsewhere or if status is 'new')
+            // We allow changing 'new' -> 'new' (no op) or proposing changes.
+            // But we want to prevent moving to 'in_progress' or 'completed' etc if no provider.
+
+            // Actually, the user wants: "if not assigned, owner cannot change status".
+            if (!$workRequest->provider_id && !$validated['confirm'] && !$request->input('reject')) {
+                // Allow cancelling maybe? But for now strict block as requested.
+                return response()->json(['message' => __('Cannot change status until a provider is assigned.')], 403);
             }
         }
 
         if ($validated['confirm'] && $workRequest->pending_status) {
             if ($workRequest->pending_status_changed_by === $userId) {
-                return response()->json(['message' => 'You cannot confirm your own change request'], 400);
+                return response()->json(['message' => __('You cannot confirm your own change request')], 400);
             }
 
             $oldStatus = $workRequest->status;
@@ -128,8 +138,8 @@ class WorkRequestController extends Controller
                 Notification::create([
                     'user_id' => $recipientId,
                     'type' => 'status_confirmed',
-                    'title' => 'Status Change Confirmed',
-                    'message' => "The status change to '{$workRequest->status}' has been confirmed for '{$workRequest->work_title}'.",
+                    'title' => __('Status Change Confirmed'),
+                    'message' => __("The status change to ':new_status' has been confirmed for ':work_title'.", ['new_status' => $workRequest->status, 'work_title' => $workRequest->work_title]),
                     'data' => [
                         'work_request_id' => $id,
                         'new_status' => $workRequest->status
@@ -150,7 +160,7 @@ class WorkRequestController extends Controller
 
         if ($request->input('reject') && $workRequest->pending_status) {
             if ($workRequest->pending_status_changed_by === $userId) {
-                return response()->json(['message' => 'You cannot reject your own change request'], 400);
+                return response()->json(['message' => __('You cannot reject your own change request')], 400);
             }
 
             $rejectedStatus = $workRequest->pending_status;
@@ -171,8 +181,8 @@ class WorkRequestController extends Controller
                 \App\Models\Notification::create([
                     'user_id' => $recipientId,
                     'type' => 'status_rejected',
-                    'title' => 'Status Change Rejected',
-                    'message' => "The status change to '{$rejectedStatus}' has been rejected for '{$workRequest->work_title}'.",
+                    'title' => __('Status Change Rejected'),
+                    'message' => __("The status change to ':rejected_status' has been rejected for ':work_title'.", ['rejected_status' => $rejectedStatus, 'work_title' => $workRequest->work_title]),
                     'data' => [
                         'work_request_id' => $id,
                         'rejected_status' => $rejectedStatus
@@ -217,8 +227,8 @@ class WorkRequestController extends Controller
             Notification::create([
                 'user_id' => $recipientId,
                 'type' => 'status_pending',
-                'title' => 'Status Change Requested',
-                'message' => "A status change to '{$validated['status']}' has been requested for '{$workRequest->work_title}'. Please confirm.",
+                'title' => __('Status Change Requested'),
+                'message' => __("A status change to ':pending_status' has been requested for ':work_title'. Please confirm.", ['pending_status' => $validated['status'], 'work_title' => $workRequest->work_title]),
                 'data' => [
                     'work_request_id' => $id,
                     'pending_status' => $validated['status']
@@ -227,7 +237,7 @@ class WorkRequestController extends Controller
         }
 
         return response()->json([
-            'message' => 'Status change requested. Waiting for other party to confirm.',
+            'message' => __('Status change requested. Waiting for other party to confirm.'),
             'work_request' => $workRequest->load('logs')
         ]);
     }
@@ -241,11 +251,11 @@ class WorkRequestController extends Controller
         $workRequest = WorkRequest::findOrFail($id);
 
         if ($workRequest->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Unauthorized. Only the owner can assign a provider.'], 403);
+            return response()->json(['message' => __('Unauthorized. Only the owner can assign a provider.')], 403);
         }
 
         if ($workRequest->provider_id) {
-            return response()->json(['message' => 'A provider has already been assigned to this request.'], 400);
+            return response()->json(['message' => __('A provider has already been assigned to this request.')], 400);
         }
 
         $workRequest->provider_id = $validated['provider_id'];
@@ -264,8 +274,8 @@ class WorkRequestController extends Controller
         \App\Models\Notification::create([
             'user_id' => $validated['provider_id'],
             'type' => 'status_update',
-            'title' => 'Project Assigned',
-            'message' => "You have been assigned to '{$workRequest->work_title}'.",
+            'title' => __('Project Assigned'),
+            'message' => __("You have been assigned to ':work_title'.", ['work_title' => $workRequest->work_title]),
             'data' => [
                 'work_request_id' => $id,
                 'status' => 'in_progress'
@@ -273,7 +283,7 @@ class WorkRequestController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Provider assigned successfully',
+            'message' => __('Provider assigned successfully'),
             'work_request' => $workRequest->load('logs')
         ]);
     }
